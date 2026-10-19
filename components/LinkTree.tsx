@@ -29,8 +29,9 @@ function LinkCard({ l, i, n, featured, isNew, onGo, onCopy }: {
   const badge = l.badge || (isNew ? 'New' : '')
   return (
     <div className={`rise relative ${featured ? '' : 'rowwrap'}`} data-feat={featured ? '' : undefined} style={{ ['--i' as string]: i }}>
-      <a href={safeUrl(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => onGo(l)}
-        className={featured ? 'feature flex items-center gap-3.5 p-3.5 pr-[3.4rem]' : 'row flex items-center gap-3.5 py-3.5 pr-[3.2rem]'}>
+    <a href={safeUrl(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => onGo(l)}
+  data-umami-event={`klik: ${l.title}`}
+  className={featured ? 'feature flex items-center gap-3.5 p-3.5 pr-[3.4rem]' : 'row flex items-center gap-3.5 py-3.5 pr-[3.2rem]'}>
         {!featured && <span className="idx mono">{String(n).padStart(2, '0')}</span>}
         <Logo url={l.url} custom={l.icon_url} size={featured ? '3.3rem' : '2.7rem'} />
         <span className="min-w-0 flex-1 text-left">
