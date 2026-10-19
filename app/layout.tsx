@@ -33,7 +33,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* pasang tema tersimpan sebelum render supaya tidak berkedip */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />
       </head>
-      <body>{children}</body>
+      <body>
+  {children}
+  <Script defer src="https://cloud.umami.is/script.js" data-website-id="TEMPEL-WEBSITE-ID-DI-SINI" strategy="afterInteractive" />
+</body>
     </html>
   )
 }
