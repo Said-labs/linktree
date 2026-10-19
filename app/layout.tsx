@@ -1,4 +1,5 @@
 import '@/app/globals.css'
+import Script from 'next/script'
 import type { Metadata, Viewport } from 'next'
 import { supabasePublic as db } from '@/lib/supabase'
 
