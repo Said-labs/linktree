@@ -1,6 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import type { IconType } from 'react-icons'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -8,7 +9,6 @@ import {
   FaMagnifyingGlass, FaPalette, FaQrcode, FaRegAddressCard, FaRegCopy, FaShareNodes, FaSpotify,
   FaTelegram, FaThreads, FaTiktok, FaWhatsapp, FaXmark, FaXTwitter, FaYoutube,
 } from 'react-icons/fa6'
-import { track } from '@/lib/track'
 import { THEMES } from '@/lib/themes'
 import { hostOf, safeUrl } from '@/lib/url'
 import Logo from '@/components/Logo'
@@ -21,18 +21,20 @@ const ICONS: Record<string, IconType> = {
 }
 
 const TZ = 'Asia/Jakarta'
+const PAL = ['--p1', '--p4', '--p2', '--p5', '--p3', '--p6']
+const col = (k: number) => `var(${PAL[((k % PAL.length) + PAL.length) % PAL.length]})`
+const vars = (o: Record<string, string | number>) => o as unknown as CSSProperties
 const validTheme = (id?: string | null) => !!id && THEMES.some(t => t.id === id)
 
-function LinkCard({ l, i, n, featured, isNew, onGo, onCopy }: {
-  l: LinkItem; i: number; n: number; featured?: boolean; isNew: boolean; onGo: (l: LinkItem) => void; onCopy: (l: LinkItem) => void
+function LinkCard({ l, i, n, color, featured, isNew, onGo, onCopy }: {
+  l: LinkItem; i: number; n: number; color: string; featured?: boolean; isNew: boolean; onGo: () => void; onCopy: (l: LinkItem) => void
 }) {
   const badge = l.badge || (isNew ? 'New' : '')
   return (
-    <div className={`rise relative ${featured ? '' : 'rowwrap'}`} data-feat={featured ? '' : undefined} style={{ ['--i' as string]: i }}>
-    <a href={safeUrl(l.url)} target="_blank" rel="noopener noreferrer" onClick={() => onGo(l)}
-  data-umami-event={`klik: ${l.title}`}
-  className={featured ? 'feature flex items-center gap-3.5 p-3.5 pr-[3.4rem]' : 'row flex items-center gap-3.5 py-3.5 pr-[3.2rem]'}>
-        {!featured && <span className="idx mono">{String(n).padStart(2, '0')}</span>}
+    <div className="rise relative" data-feat={featured ? '' : undefined} style={vars({ '--i': Math.min(i, 14), '--c': color })}>
+      <a href={safeUrl(l.url)} target="_blank" rel="noopener noreferrer" onClick={onGo}
+        className={featured ? 'feature flex items-center gap-3.5 p-3.5 pr-[3.4rem]' : 'item flex items-center gap-3 p-2.5 pr-[3.2rem]'}>
+        {!featured && <span className="num mono">{String(n).padStart(2, '0')}</span>}
         <Logo url={l.url} custom={l.icon_url} size={featured ? '3.3rem' : '2.7rem'} />
         <span className="min-w-0 flex-1 text-left">
           <span className="flex items-center gap-2">
@@ -51,6 +53,7 @@ function LinkCard({ l, i, n, featured, isNew, onGo, onCopy }: {
 }
 
 type Props = { profile: Profile; categories: Category[]; links: LinkItem[]; socials: Social[] }
+type Group = { key: string; name: string; emoji: string; color: string; items: LinkItem[] }
 
 export default function LinkTree({ profile, categories, links, socials }: Props) {
   const [cat, setCat] = useState('all')
@@ -64,7 +67,8 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
   const [clock, setClock] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const tagline = (profile.bio ?? '').split('|').map(s => s.trim()).filter(Boolean).join('  ·  ')
+  const bioParts = (profile.bio ?? '').split('|').map(s => s.trim()).filter(Boolean)
+  const tagline = bioParts.join('  ·  ')
 
   const say = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(''), 1800) }, [])
 
@@ -76,9 +80,7 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
     setTheme(saved)
     const upd = () => setClock(new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: TZ, hour12: false }).format(new Date()).replace(':', '.'))
     upd(); const c = setInterval(upd, 20000)
-    track('view')
-    const t = setInterval(() => { if (!document.hidden) track('ping') }, 20000)
-    return () => { clearInterval(t); clearInterval(c) }
+    return () => clearInterval(c)
   }, [profile.theme])
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
   const copy = async (text: string, msg = 'Link disalin ✓') => {
     try { await navigator.clipboard.writeText(text); say(msg) } catch { say('Gagal menyalin') }
   }
-  const go = (l: LinkItem) => { track('click', l.id); try { navigator.vibrate?.(8) } catch {} }
+  const go = () => { try { navigator.vibrate?.(8) } catch {} }
   const share = async () => {
     const data = { title: `@${profile.username}`, text: profile.name, url: origin }
     if (navigator.share) { try { await navigator.share(data) } catch {} } else copy(origin)
@@ -106,7 +108,7 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
 
   const saveContact = () => {
     const v = [
-      'BEGIN:VCARD', 'VERSION:3.0', `FN:${profile.name}`, `N:;${profile.name};;;`, `TITLE:${(profile.bio ?? '').split('|')[0].trim()}`,
+      'BEGIN:VCARD', 'VERSION:3.0', `FN:${profile.name}`, `N:;${profile.name};;;`, `TITLE:${bioParts[0] ?? ''}`,
       profile.phone && `TEL;TYPE=CELL:${profile.phone}`, profile.email && `EMAIL:${profile.email}`,
       `URL:${window.location.origin}`, 'END:VCARD',
     ].filter(Boolean).join('\r\n')
@@ -123,24 +125,43 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
   const regular = regularAll.filter(l => (cat === 'all' || l.category_id === cat) && match(l))
   const countOf = (id: string) => regularAll.filter(l => l.category_id === id).length
   const isNew = (l: LinkItem) => mounted && !!l.created_at && Date.now() - new Date(l.created_at).getTime() < 7 * 864e5
-  const wa = profile.phone ? `https://wa.me/${profile.phone.replace(/\D/g, '')}` : ''
+
+  const firstName = profile.name.split(' ')[0]
+  const waDigits = profile.phone ? profile.phone.replace(/\D/g, '') : ''
+  const wa = waDigits ? `https://wa.me/${waDigits}?text=${encodeURIComponent(`Halo ${firstName}, saya lihat linktree kamu dan ingin ngobrol.`)}` : ''
   const mail = profile.email ? `mailto:${profile.email}` : ''
   const meta = useMemo(() => [profile.location, clock && `${clock} WIB`].filter(Boolean).join(' · '), [profile.location, clock])
 
+  // Pita berjalan: bio + status + lokasi
+  const ticker = [...bioParts, profile.status, profile.location].filter(Boolean) as string[]
+  const base = ticker.length ? ticker : [profile.name]
+  const loop = Array.from({ length: Math.max(1, Math.ceil(8 / base.length)) }, () => base).flat()
+
+  // Kelompok link
+  const groups: Group[] = (() => {
+    if (cat === 'all' && !q && categories.length) {
+      const g: Group[] = categories.map((c, k) => ({
+        key: c.id, name: c.name, emoji: c.emoji || '•', color: col(k + 1),
+        items: regular.filter(l => l.category_id === c.id),
+      }))
+      const rest = regular.filter(l => !l.category_id || !categories.some(c => c.id === l.category_id))
+      if (rest.length) g.push({ key: 'rest', name: 'Lainnya', emoji: '✦', color: col(categories.length + 1), items: rest })
+      return g.filter(x => x.items.length)
+    }
+    const k = categories.findIndex(c => c.id === cat)
+    const c = k >= 0 ? categories[k] : null
+    return regular.length
+      ? [{ key: cat + q, name: q ? 'Hasil pencarian' : c ? c.name : 'Link', emoji: q ? '⌕' : c?.emoji || '✦', color: col(Math.max(k, 0) + 1), items: regular }]
+      : []
+  })()
+
   return (
     <>
-      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[30rem] flex-col px-5 pb-12 pt-5">
+      <div className="stripe" aria-hidden />
+      <main className="mx-auto flex min-h-[100dvh] w-full max-w-[30rem] flex-col px-5 pb-12 pt-6">
         {/* Bilah atas */}
         <div className="flex w-full items-center justify-between gap-3">
-          {profile.status ? (
-            <span className="chip mono">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              </span>
-              {profile.status}
-            </span>
-          ) : <span />}
+          <span className="mono muted text-[0.68rem] uppercase tracking-[0.18em]">✦ link in bio</span>
           <div className="flex gap-2">
             <button className="iconbtn" onClick={share} aria-label="Bagikan" title="Bagikan"><FaShareNodes /></button>
             <button className="iconbtn" onClick={() => setShowQr(true)} aria-label="Kode QR" title="Kode QR"><FaQrcode /></button>
@@ -159,23 +180,44 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
           </div>
         )}
 
-        {/* Profil */}
-        <header className="rise mt-9 w-full">
-          <img src={profile.avatar_url || '/avatar.svg'} alt={profile.name} className="avatar" />
-          <h1 className="display name mt-7">{profile.name}</h1>
+        {/* Kartu profil */}
+        <header className="hero rise mt-6">
+          <div className="flex items-start justify-between gap-3">
+            <img src={profile.avatar_url || '/avatar.svg'} alt={profile.name} className="avatar" />
+            {profile.status && (
+              <span className="sticker mono">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                </span>
+                {profile.status}
+              </span>
+            )}
+          </div>
+          <h1 className="display name mt-6">{profile.name}</h1>
           <p className="mono handle mt-2.5">@{profile.username}{meta ? ` · ${meta}` : ''}</p>
-          {tagline && <p className="bio balance mt-4">{tagline}</p>}
-
-          <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          {tagline && <p className="bio balance mt-3">{tagline}</p>}
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
             <button className="btn" onClick={saveContact}><FaRegAddressCard />Simpan Kontak</button>
             {wa && <a className="btn-ghost" href={wa} target="_blank" rel="noopener noreferrer"><FaWhatsapp />WhatsApp</a>}
             {mail && <a className="iconbtn !h-[2.7rem] !w-[2.7rem]" href={mail} aria-label="Email" title="Email"><FaEnvelope /></a>}
           </div>
         </header>
 
+        {/* Pita berjalan */}
+        <div className="bandwrap" aria-hidden>
+          <div className="band">
+            <div className="track">
+              {[0, 1].map(copyIdx => loop.map((t, k) => (
+                <span key={`${copyIdx}-${k}`}>{t}<i style={{ color: col(k) }}>✦</i></span>
+              )))}
+            </div>
+          </div>
+        </div>
+
         {/* Pencarian */}
         {links.length > 5 && (
-          <div className="rise relative mt-9 w-full" style={{ ['--i' as string]: 2 }}>
+          <div className="rise relative mt-2 w-full" style={vars({ '--i': 2 })}>
             <FaMagnifyingGlass className="muted pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[0.8rem]" />
             <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari link…  ( tekan / )" aria-label="Cari link"
               className="field !pl-10 !pr-10" />
@@ -185,47 +227,78 @@ export default function LinkTree({ profile, categories, links, socials }: Props)
 
         {/* Sorotan */}
         {featured.length > 0 && (
-          <section className="mt-9 w-full space-y-4">
-            <p className="eyebrow">Sorotan</p>
-            {featured.map((l, i) => <LinkCard key={l.id} l={l} i={i + 3} n={i + 1} featured isNew={isNew(l)} onGo={go} onCopy={x => copy(x.url)} />)}
+          <section className="mt-9 w-full">
+            <div className="sechead" style={vars({ '--c': 'var(--p2)' })}>
+              <span className="secico">★</span><h2 className="display">Sorotan</h2>
+              <span className="count mono">{featured.length}</span>
+            </div>
+            <div className="space-y-4">
+              {featured.map((l, i) => (
+                <LinkCard key={l.id} l={l} i={i + 3} n={i + 1} color={col(i)} featured isNew={isNew(l)} onGo={go} onCopy={x => copy(x.url)} />
+              ))}
+            </div>
           </section>
         )}
 
-        {/* Kategori / judul daftar */}
-        {categories.length > 0 && !q ? (
-          <nav className="no-scrollbar mt-10 flex w-full gap-5 overflow-x-auto border-b border-[color:var(--line)]" aria-label="Kategori">
-            <button className="tab mono" data-active={cat === 'all'} onClick={() => setCat('all')}>Semua<sup>{regularAll.length}</sup></button>
-            {categories.map(c => (
-              <button key={c.id} className="tab mono" data-active={cat === c.id} onClick={() => setCat(c.id)}>
+        {/* Tab kategori */}
+        {categories.length > 0 && !q && (
+          <nav className="no-scrollbar mt-9 flex w-full gap-2.5 overflow-x-auto px-1 pb-2 pt-1" aria-label="Kategori">
+            <button className="ctab all mono" style={vars({ '--c': 'var(--fg)' })} data-active={cat === 'all'} onClick={() => setCat('all')}>Semua<sup>{regularAll.length}</sup></button>
+            {categories.map((c, k) => (
+              <button key={c.id} className="ctab mono" style={vars({ '--c': col(k + 1) })} data-active={cat === c.id} onClick={() => setCat(c.id)}>
                 {c.emoji} {c.name}<sup>{countOf(c.id)}</sup>
               </button>
             ))}
           </nav>
-        ) : (
-          <p className="eyebrow mt-10 pb-3">{q ? 'Hasil' : 'Link'}</p>
         )}
 
-        {/* Daftar link */}
-        <section className="w-full" key={cat + q}>
-          {regular.map((l, i) => <LinkCard key={l.id} l={l} i={i + 4} n={i + 1} isNew={isNew(l)} onGo={go} onCopy={x => copy(x.url)} />)}
-          {regular.length === 0 && featured.length === 0 && (
-            <p className="muted py-10 text-center text-[0.9rem]">{q ? `Tidak ada hasil untuk “${query}”` : 'Belum ada link di kategori ini.'}</p>
-          )}
-        </section>
+        {/* Daftar link per kelompok */}
+        {groups.map((g, gi) => (
+          <section key={g.key} className="mt-7 w-full">
+            <div className="sechead" style={vars({ '--c': g.color })}>
+              <span className="secico">{g.emoji}</span><h2 className="display">{g.name}</h2>
+              <span className="count mono">{g.items.length}</span>
+            </div>
+            <div className="space-y-2.5">
+              {g.items.map((l, i) => (
+                <LinkCard key={l.id} l={l} i={gi * 3 + i + 4} n={i + 1} color={g.color} isNew={isNew(l)} onGo={go} onCopy={x => copy(x.url)} />
+              ))}
+            </div>
+          </section>
+        ))}
+        {groups.length === 0 && featured.length === 0 && (
+          <p className="muted py-10 text-center text-[0.9rem]">{q ? `Tidak ada hasil untuk “${query}”` : 'Belum ada link di kategori ini.'}</p>
+        )}
+
+        {/* Ajakan kolaborasi */}
+        {(wa || mail) && (
+          <section className="cta mt-12 w-full">
+            <p className="mono text-[0.68rem] uppercase tracking-[0.18em] opacity-70">✦ Ayo terhubung</p>
+            <h2 className="display mt-2 text-[1.6rem] font-semibold leading-tight">Punya ide atau peluang kolaborasi?</h2>
+            <p className="mt-2 text-[0.92rem] opacity-80">Kirim pesan saja, aku senang ngobrol.</p>
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              {wa && <a className="btn" href={wa} target="_blank" rel="noopener noreferrer"><FaWhatsapp />Chat WhatsApp</a>}
+              {mail && <a className="btn-ghost" href={mail}><FaEnvelope />Email</a>}
+            </div>
+          </section>
+        )}
 
         {/* Sosial */}
         {socials.length > 0 && (
-          <div className="mt-10 flex flex-wrap gap-2.5">
-            {socials.map(s => {
-              const Icon = ICONS[s.platform.toLowerCase()] ?? FaLink
-              return (
-                <a key={s.id} aria-label={s.platform} title={s.platform} href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer"
-                  className="iconbtn !h-11 !w-11 !text-[1.05rem]">
-                  <Icon />
-                </a>
-              )
-            })}
-          </div>
+          <section className="mt-10 w-full">
+            <p className="mono muted mb-3 text-[0.68rem] uppercase tracking-[0.18em]">Temukan aku di</p>
+            <div className="flex flex-wrap gap-3">
+              {socials.map((s, k) => {
+                const Icon = ICONS[s.platform.toLowerCase()] ?? FaLink
+                return (
+                  <a key={s.id} aria-label={s.platform} title={s.platform} href={safeUrl(s.url)} target="_blank" rel="noopener noreferrer"
+                    className="social" style={vars({ '--c': col(k) })}>
+                    <Icon />
+                  </a>
+                )
+              })}
+            </div>
+          </section>
         )}
 
         <footer className="mono muted mt-12 flex items-center justify-between text-[0.68rem] tracking-wide">
